@@ -3,3 +3,5 @@
 *.yaml
 *.sh
 /scripts/reports/*
+cms*
+/rmf*
