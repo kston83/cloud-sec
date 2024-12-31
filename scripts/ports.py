@@ -154,57 +154,6 @@ def get_protocol_for_service(resource_name, protocol, port, service_type=''):
     
     return protocol or 'Unknown'
 
-def list_alb_ports(elbv2_client, waf_client, markdown_file, all_ports):
-    write_to_markdown(markdown_file, "\n# ALB Listener Ports")
-    try:
-        load_balancers = elbv2_client.describe_load_balancers()['LoadBalancers']
-        rows = []
-        for lb in load_balancers:
-            listeners = elbv2_client.describe_listeners(LoadBalancerArn=lb['LoadBalancerArn'])['Listeners']
-            
-            # Get WAF association if any
-            try:
-                waf_association = waf_client.get_web_acl_for_resource(
-                    ResourceArn=lb['LoadBalancerArn']
-                )
-                waf_acl = waf_association.get('WebACLSummary', {}).get('Name', 'N/A')
-            except:
-                waf_acl = 'N/A'
-            
-            for listener in listeners:
-                protocol = get_protocol_for_service(
-                    lb['LoadBalancerName'],
-                    listener['Protocol'],
-                    str(listener['Port']),
-                    'alb'
-                )
-                
-                # Get target group details
-                target_groups = []
-                if 'DefaultActions' in listener:
-                    for action in listener['DefaultActions']:
-                        if action['Type'] == 'forward' and 'TargetGroupArn' in action:
-                            target_group = action['TargetGroupArn'].split('/')[-1]
-                            target_groups.append(target_group)
-                
-                rows.append([
-                    lb['LoadBalancerName'],
-                    protocol,
-                    str(listener['Port']),
-                    listener.get('SslPolicy', 'N/A') if protocol == 'HTTPS' else 'N/A',
-                    waf_acl,
-                    ', '.join(target_groups) if target_groups else 'N/A'
-                ])
-                all_ports.append([lb['LoadBalancerName'], protocol, str(listener['Port'])])
-        
-        if rows:
-            write_to_markdown(markdown_file, format_table(
-                ["Load Balancer Name", "Protocol", "Port", "SSL Policy", "WAF ACL", "Target Groups"],
-                sorted(rows)
-            ))
-    except Exception as e:
-        write_to_markdown(markdown_file, f"Error listing ALB ports: {str(e)}")
-
 def get_port_range_display(from_port, to_port):
     """Format port range for display"""
     if from_port == to_port:
@@ -261,6 +210,9 @@ def list_rds_instances(rds_client, markdown_file, all_ports):
 def list_waf_configs(waf_client, wafregional_client, markdown_file, all_ports):
     write_to_markdown(markdown_file, "\n# WAF Configurations")
     try:
+        # Define ports at the beginning of the function
+        ports = ['80', '443']  # Default ports for web traffic
+        
         # Get WAF ACLs
         web_acls = waf_client.list_web_acls()['WebACLs']
         rows = []
@@ -284,8 +236,7 @@ def list_waf_configs(waf_client, wafregional_client, markdown_file, all_ports):
                 except:
                     continue
             
-            # Default ports for web traffic
-            ports = ['80', '443']
+            # Add entries for both ports
             for port in ports:
                 rows.append([
                     acl['Name'],
@@ -317,6 +268,7 @@ def list_waf_configs(waf_client, wafregional_client, markdown_file, all_ports):
                     except:
                         continue
                 
+                # Add entries for both ports
                 for port in ports:
                     rows.append([
                         acl['Name'],
@@ -406,33 +358,138 @@ def list_security_group_rules(ec2_client, markdown_file, all_ports):
     except Exception as e:
         write_to_markdown(markdown_file, f"Error listing security groups: {str(e)}")
 
-def list_alb_ports(elbv2_client, markdown_file, all_ports):
+def list_alb_ports(elbv2_client, waf_client, markdown_file, all_ports):
     write_to_markdown(markdown_file, "\n# ALB Listener Ports")
     try:
         load_balancers = elbv2_client.describe_load_balancers()['LoadBalancers']
         rows = []
         for lb in load_balancers:
             listeners = elbv2_client.describe_listeners(LoadBalancerArn=lb['LoadBalancerArn'])['Listeners']
+            
+            # Get WAF association if any
+            try:
+                waf_association = waf_client.get_web_acl_for_resource(
+                    ResourceArn=lb['LoadBalancerArn']
+                )
+                waf_acl = waf_association.get('WebACLSummary', {}).get('Name', 'N/A')
+            except Exception:
+                waf_acl = 'N/A'
+            
             for listener in listeners:
-                protocol = get_protocol_for_service(lb['LoadBalancerName'], 
-                                                  listener['Protocol'], 
-                                                  str(listener['Port']), 
-                                                  'alb')
+                protocol = get_protocol_for_service(
+                    lb['LoadBalancerName'],
+                    listener['Protocol'],
+                    str(listener['Port']),
+                    'alb'
+                )
+                
+                # Get target group details
+                target_groups = []
+                if 'DefaultActions' in listener:
+                    for action in listener['DefaultActions']:
+                        if action['Type'] == 'forward' and 'TargetGroupArn' in action:
+                            target_group = action['TargetGroupArn'].split('/')[-1]
+                            target_groups.append(target_group)
+                
                 rows.append([
                     lb['LoadBalancerName'],
                     protocol,
                     str(listener['Port']),
-                    listener.get('SslPolicy', 'N/A') if protocol == 'HTTPS' else 'N/A'
+                    listener.get('SslPolicy', 'N/A') if protocol == 'HTTPS' else 'N/A',
+                    waf_acl,
+                    ', '.join(target_groups) if target_groups else 'N/A'
                 ])
                 all_ports.append([lb['LoadBalancerName'], protocol, str(listener['Port'])])
         
         if rows:
             write_to_markdown(markdown_file, format_table(
-                ["Load Balancer Name", "Protocol", "Port", "SSL Policy"],
+                ["Load Balancer Name", "Protocol", "Port", "SSL Policy", "WAF ACL", "Target Groups"],
                 sorted(rows)
             ))
     except Exception as e:
         write_to_markdown(markdown_file, f"Error listing ALB ports: {str(e)}")
+
+def list_nacl_rules(ec2_client, markdown_file, all_ports):
+    write_to_markdown(markdown_file, "\n# Network ACL Rules")
+    try:
+        nacls = ec2_client.describe_network_acls()['NetworkAcls']
+        rows = []
+        for nacl in nacls:
+            for entry in nacl['Entries']:
+                direction = "Inbound" if not entry['Egress'] else "Outbound"
+                port_range = entry.get('PortRange', {})
+                from_port = port_range.get('From', 'All')
+                to_port = port_range.get('To', 'All')
+                port_display = get_port_range_display(from_port, to_port)
+                
+                protocol = get_protocol_for_service(
+                    nacl['NetworkAclId'],
+                    str(entry.get('Protocol', '-1')),
+                    str(from_port),
+                    'nacl'
+                )
+                
+                rows.append([
+                    nacl['NetworkAclId'],
+                    direction,
+                    protocol,
+                    port_display,
+                    entry.get('RuleAction', 'N/A'),
+                    entry.get('CidrBlock', 'N/A')
+                ])
+                all_ports.append([
+                    f"NACL-{nacl['NetworkAclId']}", 
+                    protocol, 
+                    port_display
+                ])
+        
+        if rows:
+            write_to_markdown(markdown_file, format_table(
+                ["NACL ID", "Direction", "Protocol", "Ports", "Action", "CIDR"],
+                sorted(rows)
+            ))
+    except Exception as e:
+        write_to_markdown(markdown_file, f"Error listing NACL rules: {str(e)}")
+
+def list_nat_gateways(ec2_client, markdown_file, all_ports):
+    write_to_markdown(markdown_file, "\n# NAT Gateways")
+    try:
+        nat_gateways = ec2_client.describe_nat_gateways()['NatGateways']
+        rows = []
+        for nat in nat_gateways:
+            if nat['NatGatewayAddresses']:
+                public_ip = nat['NatGatewayAddresses'][0].get('PublicIp', 'N/A')
+                private_ip = nat['NatGatewayAddresses'][0].get('PrivateIp', 'N/A')
+                
+                # NAT Gateways use specific ports for different protocols
+                nat_ports = [
+                    ('TCP', '1024-65535'),
+                    ('UDP', '1024-65535'),
+                    ('ICMP', 'All')
+                ]
+                
+                for protocol, port_range in nat_ports:
+                    rows.append([
+                        nat['NatGatewayId'],
+                        public_ip,
+                        private_ip,
+                        protocol,
+                        port_range,
+                        nat['State']
+                    ])
+                    all_ports.append([
+                        f"NAT-{nat['NatGatewayId']}", 
+                        protocol, 
+                        port_range
+                    ])
+        
+        if rows:
+            write_to_markdown(markdown_file, format_table(
+                ["NAT Gateway ID", "Public IP", "Private IP", "Protocol", "Ports", "State"],
+                sorted(rows)
+            ))
+    except Exception as e:
+        write_to_markdown(markdown_file, f"Error listing NAT gateways: {str(e)}")
 
 def list_ecs_ports(ecs_client, markdown_file, all_ports):
     write_to_markdown(markdown_file, "\n# ECS Task Definitions and Ports")
@@ -476,6 +533,47 @@ def list_ecs_ports(ecs_client, markdown_file, all_ports):
             ))
     except Exception as e:
         write_to_markdown(markdown_file, f"Error listing ECS ports: {str(e)}")
+
+def list_vpc_endpoints(ec2_client, markdown_file, all_ports):
+    write_to_markdown(markdown_file, "\n# VPC Endpoints")
+    try:
+        endpoints = ec2_client.describe_vpc_endpoints()['VpcEndpoints']
+        rows = []
+        for endpoint in endpoints:
+            protocol = get_protocol_for_service(
+                endpoint['ServiceName'],
+                'TCP',  # VPC Endpoints typically use TCP
+                '443',  # Most AWS services use HTTPS (port 443)
+                'vpc_endpoint'
+            )
+            
+            security_groups = [sg['GroupId'] for sg in endpoint.get('Groups', [])]
+            
+            rows.append([
+                endpoint['VpcEndpointId'],
+                endpoint['VpcEndpointType'],
+                endpoint['ServiceName'],
+                protocol,
+                endpoint['State'],
+                ', '.join(security_groups) if security_groups else 'N/A'
+            ])
+            
+            # Only add to all_ports if it's an interface endpoint (Gateway endpoints don't have ports)
+            if endpoint['VpcEndpointType'] == 'Interface':
+                all_ports.append([
+                    f"VPCe-{endpoint['VpcEndpointId']}", 
+                    protocol, 
+                    '443'
+                ])
+        
+        if rows:
+            write_to_markdown(markdown_file, format_table(
+                ["Endpoint ID", "Type", "Service", "Protocol", "State", "Security Groups"],
+                sorted(rows)
+            ))
+    except Exception as e:
+        write_to_markdown(markdown_file, f"Error listing VPC endpoints: {str(e)}")
+
 
 def list_all_ports(markdown_file, all_ports):
     write_to_markdown(markdown_file, "\n# Consolidated Ports Table")
@@ -583,7 +681,7 @@ def main():
             'alb': (list_alb_ports, [clients['elbv2'], clients['waf']]),
             'ecs': (list_ecs_ports, [clients['ecs']]),
             'rds': (list_rds_instances, [clients['rds']]),
-            'waf': (list_waf_configs, [clients['waf'], clients['wafregional'], clients['wafv2']]),
+            'waf': (list_waf_configs, [clients['waf'], clients['wafregional']]),
             'nacl': (list_nacl_rules, [clients['ec2']]),
             'nat': (list_nat_gateways, [clients['ec2']]),
             'vpc': (list_vpc_endpoints, [clients['ec2']])
