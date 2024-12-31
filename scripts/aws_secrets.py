@@ -4,6 +4,8 @@ import json
 import argparse
 
 
+## Script to generate a report of AWS Secrets Manager inventory and rotation status
+
 def get_aws_session(profile_name=None, region_name=None):
     """Create a boto3 session for a given profile and region."""
     return boto3.Session(profile_name=profile_name, region_name=region_name)

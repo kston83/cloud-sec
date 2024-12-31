@@ -4,6 +4,8 @@ import json
 import yaml
 import os
 
+## Script to generate a report of Secrets Manager secrets and rotation events
+
 def load_config(config_path="config.yaml"):
     """Load configuration from a YAML file."""
     try:

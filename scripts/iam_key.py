@@ -3,6 +3,8 @@ import json
 import argparse
 from datetime import datetime, timezone
 
+## Script to generate a report of IAM users and access keys
+
 def get_aws_session(profile_name=None):
     """Create a boto3 session for a given profile."""
     return boto3.Session(profile_name=profile_name)
