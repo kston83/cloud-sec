@@ -6,3 +6,5 @@
 cms*
 /rmf*
 scripts/vpc_ports_and_protocols.md
+*.zip
+/aws_credentials_setup*
