@@ -2,9 +2,10 @@
 # Ignore config files
 *.yaml
 *.sh
-/scripts/reports/*
+/scripts/reports*
 cms*
 /rmf*
 scripts/vpc_ports_and_protocols.md
 *.zip
 /aws_credentials_setup*
+/scripts/archive*
