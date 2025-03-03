@@ -1,6 +1,6 @@
 # cloud-security
 
-A collection of Python scripts for AWS security and compliance monitoring. These tools generate detailed reports about various AWS configurations, resources, and best-practice checks.
+A collection of Python scripts for AWS security and compliance monitoring, container security scanning, and code security analysis. These tools generate detailed reports about various AWS configurations, resources, best-practice checks, container vulnerabilities, and security-sensitive code patterns.
 
 ## Table of Contents
 
@@ -16,10 +16,15 @@ A collection of Python scripts for AWS security and compliance monitoring. These
     - [EC2 Inventory (`ec2_list.py`)](#ec2-inventory-ec2_listpy)
     - [Security Hub Findings (`sec_hub.py`)](#security-hub-findings-sec_hubpy)
     - [Trusted Advisor Analysis (`trustedadvisor.py`)](#trusted-advisor-analysis-trustedadvisorpy)
+    - [Container Vulnerability Analysis (`artifactory_grype.py`)](#container-vulnerability-analysis-artifactory_grypepy)
+    - [Local Container Scanner (`local_grype.py`)](#local-container-scanner-local_grypepy)
+    - [React Security Scanner (`dangerhtml.py`)](#react-security-scanner-dangerhtmlpy)
+    - [Secret Detection Scanner (`truff.py`)](#secret-detection-scanner-truffpy)
+    - [Software EOL Checker (`syft_eol.py`)](#software-eol-checker-syft_eolpy)
+    - [AWS Inventory Collection (`aws_inventory.py`)](#aws-inventory-collection-aws_inventorypy)
   - [Configuration](#configuration)
   - [Output](#output)
   - [Permissions Required](#permissions-required)
-  - [Best Practices](#best-practices)
   - [Error Handling](#error-handling)
   - [Contributing](#contributing)
 
@@ -52,10 +57,49 @@ A collection of Python scripts for AWS security and compliance monitoring. These
    - Computes potential cost impact, risk levels, and recommended actions for each check.
    - Generates reports in multiple formats (JSON, CSV, Markdown, and optionally Excel) for in-depth analysis.
 
+7. **Container Vulnerability Analysis** (`artifactory_grype.py`)
+   - Scans container images from Artifactory for vulnerabilities using Syft and Grype.
+   - Generates detailed Software Bill of Materials (SBOM) and vulnerability reports.
+   - Provides layer-aware vulnerability analysis with categorization by component type.
+   - Creates comprehensive CSV reports with severity ratings and CVSS scores.
+
+8. **Local Container Scanner** (`local_grype.py`)
+   - Scans local Docker images for vulnerabilities using Syft and Grype
+   - Generates detailed SBOM and vulnerability analysis for locally available container images
+   - Provides layer-aware vulnerability analysis with categorization by component type
+   - Creates comprehensive CSV reports with severity ratings and CVSS scores
+
+9. **React Security Scanner** (`dangerhtml.py`)
+   - Scans React codebases for potentially unsafe usage of dangerouslySetInnerHTML.
+   - Performs intelligent detection of sanitization methods and potentially unsafe variables.
+   - Supports parallel processing for large codebases.
+   - Generates detailed reports in multiple formats (Markdown, Obsidian, JSON, CSV).
+
+10. **Secret Detection Scanner** (`truff.py`)
+    - Automates TruffleHog scans across multiple Git repositories.
+    - Supports both single repository and multi-repository directory structures.
+    - Automatically updates repositories to latest versions before scanning.
+    - Generates HTML reports organized by date and project.
+
+11. **Software EOL Checker** (`syft_eol.py`)
+    - Scans packages in container images or directories using Syft to identify end-of-life software.
+    - Checks packages against the endoflife.date API to determine EOL status and days remaining.
+    - Categorizes findings by severity (End of Life, Critical, Warning, Attention, OK).
+    - Generates detailed reports in HTML or CSV format highlighting vulnerable components.
+
+12. **AWS Inventory Collection** (`aws_inventory.py`)
+    - Comprehensive inventory collection of AWS resources across various services.
+    - Collects data on over 30 different resource types including EC2, RDS, Lambda, S3, VPC resources, and more.
+    - Generates reports in multiple formats (JSON, CSV, HTML) with detailed information on each resource.
+    - Includes summary statistics and resource counts in the HTML report format.
+
 ## Prerequisites
 
 - **Python 3.6+**  
 - **AWS Credentials** (configured via `aws configure`, environment variables, or IAM roles)
+- **Syft and Grype** (required for container scanning)
+- **Docker** (required for container scanning)
+- **TruffleHog3** (required for secret scanning)
 - **`requirements.txt`** (example contents):
   ```bash
   boto3
@@ -89,6 +133,13 @@ A collection of Python scripts for AWS security and compliance monitoring. These
    ```bash
    aws configure
    ```
+4. **Install required tools** (as needed):
+   - Visit https://github.com/anchore/syft for Syft installation
+   - Visit https://github.com/anchore/grype for Grype installation
+   - Install TruffleHog3:
+     ```bash
+     pip install trufflehog3
+     ```
 
 ## Usage
 
@@ -207,6 +258,159 @@ python trustedadvisor.py
 - By default, runs for all profiles and regions in `config.yaml`.  
 - Saves the output to a timestamped folder under `reports/`.
 
+### Container Vulnerability Analysis (`artifactory_grype.py`)
+
+```bash
+python artifactory_grype.py --image artifactory.com/docker-local/app:latest
+```
+
+**Description**  
+- Pulls container images from Artifactory and performs comprehensive vulnerability scanning
+- Generates detailed SBOM using Syft and vulnerability analysis using Grype
+- Categorizes findings by component type (Node.js Dependencies, Base Image, etc.)
+- Produces detailed CSV reports with severity levels, CVSS scores, and fix versions
+
+**Key Arguments**  
+- `--image <image>` (Optional): Docker image name with optional tag or digest (defaults to configuration in script)
+
+**Output Files**  
+- `sbom.json`: Software Bill of Materials in JSON format
+- `vulnerabilities.json`: Raw vulnerability scan results
+- `vulnerability_analysis.csv`: Detailed analysis report with:
+  - Vulnerability categorization by component type
+  - Severity levels and CVSS scores
+  - Package information and layer details
+  - Available fix versions
+  - Organized by category and severity
+
+### Local Container Scanner (`local_grype.py`)
+
+```bash
+python local_grype.py myapp:latest --output-dir /path/to/reports
+```
+
+**Description**  
+- Scans local Docker images for vulnerabilities using Syft and Grype
+- Generates detailed Software Bill of Materials (SBOM) using Syft
+- Performs comprehensive vulnerability scanning with Grype
+- Categorizes vulnerabilities by component type (Node.js, Python, Base Image, etc.)
+- Creates detailed reports with severity levels, CVSS scores, and fix versions
+
+**Key Arguments**  
+- `image` (Required): Name of the local Docker image to scan (e.g., 'myapp:latest')
+- `--output-dir` (Optional): Override default reports directory location
+
+**Output Files**  
+- `sbom.json`: Detailed Software Bill of Materials
+- `vulnerabilities.json`: Raw vulnerability scan results
+- `vulnerability_analysis.csv`: Comprehensive analysis report including:
+  - Vulnerability categorization by component type
+  - Severity levels and CVSS scores
+  - Package information and layer details
+  - Available fix versions
+  - Findings organized by category and severity
+
+### React Security Scanner (`dangerhtml.py`)
+
+```bash
+python dangerhtml.py /path/to/repository --output-format markdown --show-sanitized
+```
+
+**Description**  
+- Scans React codebases for instances of dangerouslySetInnerHTML usage
+- Detects proper sanitization implementations and potentially unsafe variables
+- Supports Git repository analysis with automatic branch updates
+- Processes files in parallel for improved performance on large codebases
+
+**Key Arguments**  
+- `repo_path` (Required): Path to the repository to scan
+- `--branch`: Specific Git branch to scan (default: current branch)
+- `--output`: Output directory for reports (default: "reports")
+- `--max-size`: Maximum file size in MB to scan (default: 1)
+- `--show-sanitized`: Include sanitized findings in the report
+- `--no-update`: Skip updating the repository from remote
+- `--verbose`: Enable detailed logging
+- `--output-format`: Choose report format (markdown/obsidian/json/csv)
+
+### Secret Detection Scanner (`truff.py`)
+
+```bash
+python truff.py --directory ~/repos --branch main
+```
+
+**Description**  
+- Automates TruffleHog secret detection scans across Git repositories
+- Can scan either a single repository or multiple repositories in a directory structure
+- Updates repositories to latest versions before scanning
+- Generates comprehensive HTML reports for each repository
+
+**Key Arguments**  
+- `--directory`, `-d`: Top-level directory containing Git repositories (default: ~/cms-repos)
+- `--branch`, `-b`: Specific branch to scan (default: current branch)
+
+**Output Structure**  
+Reports are organized by date and project in the following structure:
+```
+~/auto_scans/
+  └── YYYY-MM-DD/
+      └── project_name/
+          └── trufflehog_repo-name_YYYY-MM-DD.html
+```
+
+### Software EOL Checker (`syft_eol.py`)
+
+```bash
+python syft_eol.py alpine:latest --format html --alert-days 30 90 180
+```
+
+**Description**  
+- Uses Syft to generate a Software Bill of Materials (SBOM) for container images or directories
+- Checks each package against the endoflife.date API to determine EOL status
+- Categorizes findings by severity: End of Life, Critical, Warning, Attention, OK
+- Generates comprehensive reports highlighting packages at or near end-of-life
+
+**Key Arguments**  
+- `target` (Required): The container image or directory to analyze
+- `--file`: Path to existing Syft output file instead of scanning a new target
+- `--format`: Output format (html or csv, default: html)
+- `--alert-days`: Three thresholds (in days) for Critical, Warning, and Attention alerts (default: 90 180 365)
+- `--verbose`: Enable detailed output during scanning
+- `--output`: Filename for the output report
+
+**Output**  
+- HTML or CSV report with:
+  - Summary of EOL status across all packages
+  - Detailed tables of packages with their EOL dates and status
+  - Color-coded status indicators (End of Life, Critical, Warning, Attention, OK)
+  - List of packages not supported by endoflife.date API
+
+### AWS Inventory Collection (`aws_inventory.py`)
+
+```bash
+python aws_inventory.py --profile myprofile --region us-east-1 --output html
+```
+
+**Description**  
+- Collects comprehensive inventory of AWS resources across 30+ services
+- Gathers detailed information about compute, database, networking, security, and storage resources
+- Generates formatted reports with resource details and counts
+- Supports filtering to specific resource types if needed
+
+**Key Arguments**  
+- `--profile` (Required): AWS Profile Name to use for API calls
+- `--region` (Required): AWS Region to inventory
+- `--output` (Required): Output format (json, csv, or html)
+- `--resources` (Optional): List of specific resource types to collect (default: all available)
+
+**Output**  
+- Report file in the specified format saved to the `reports/` directory
+- HTML reports include:
+  - Interactive resource summary with counts
+  - Table of contents for easy navigation
+  - Detailed tables for each resource type
+  - Sortable and formatted data
+- CSV and JSON formats for data analysis and import into other tools
+
 ## Configuration
 
 Some scripts (e.g., `secrets.py` and `trustedadvisor.py`) allow you to specify multiple AWS profiles, projects, and regions in a `config.yaml` file, which might look like:
@@ -249,6 +453,26 @@ Depending on the script, various output files (Markdown, JSON, CSV, Excel) are g
 - **Trusted Advisor Analysis** (`trustedadvisor.py`):  
   - `<profile>_<region>_ta_report.md`, plus `.csv`, `.json`, and optionally `.xlsx` (with pivot tables).
 
+- **Container Vulnerability Analysis** (`artifactory_grype.py`):
+  - `sbom.json`: Detailed Software Bill of Materials
+  - `vulnerabilities.json`: Raw vulnerability scan results
+  - `vulnerability_analysis.csv`: Comprehensive analysis report
+
+- **Software EOL Checker** (`syft_eol.py`):
+  - `eol_report.html` or `eol_report.csv`: Detailed report of packages and their EOL status
+  - `eol_report_unsupported.csv`: List of packages not supported by endoflife.date API (CSV output only)
+
+- **AWS Inventory Collection** (`aws_inventory.py`):
+  - `aws_inventory_<profile>_<region>_<timestamp>.<format>`: Complete inventory in JSON, CSV, or HTML format
+
+- **React Security Scanner** (`dangerhtml.py`):
+  - `<repo>_audit_<date>.md`: Markdown report with findings
+  - `<repo>_audit_<date>.json`: JSON format (if specified)
+  - `<repo>_audit_<date>.csv`: CSV format (if specified)
+
+- **Secret Detection Scanner** (`truff.py`):
+  - `trufflehog_<repo-name>_<date>.html`: HTML report with detected secrets
+
 ## Permissions Required
 
 Each script requires certain AWS permissions. Below is a non-exhaustive list:
@@ -281,24 +505,53 @@ Each script requires certain AWS permissions. Below is a non-exhaustive list:
    - `ec2:DescribeInstances`  
    - `ec2:DescribeImages` (for OS mapping, optional)  
 
-5. **Security Hub Findings** (`sec_hub.py`)**  
+5. **Security Hub Findings (`sec_hub.py`)**  
    - `securityhub:GetFindings`  
 
-6. **Trusted Advisor Analysis** (`trustedadvisor.py`)**  
+6. **Trusted Advisor Analysis (`trustedadvisor.py`)**  
    - `support:DescribeTrustedAdvisorChecks`  
    - `support:DescribeTrustedAdvisorCheckResult`  
    - `support:DescribeTrustedAdvisorCheckSummaries`  
    - AWS **Business** or **Enterprise** support plan  
 
+7. **Container Vulnerability Analysis** (`artifactory_grype.py`)
+   - Docker daemon access
+   - Read access to Artifactory repository
+   - Local system permissions to run Syft and Grype
+
+8. **Software EOL Checker** (`syft_eol.py`)
+   - Docker daemon access (if scanning container images)
+   - Local system permissions to run Syft
+   - Internet access to query endoflife.date API
+
+9. **AWS Inventory Collection** (`aws_inventory.py`)
+   - Read-only permissions for all resources being inventoried
+   - Extensive IAM read permissions including:
+     - `ec2:Describe*`
+     - `rds:Describe*`
+     - `elasticache:Describe*`
+     - `lambda:List*`
+     - `s3api:List*`
+     - And similar List/Describe permissions for all AWS services being inventoried
+
+10. **Local Container Scanner** (`local_grype.py`)
+   - Docker daemon access
+   - Local system permissions to run Syft and Grype
+   - Read access to local Docker images
+   - Write permissions for output directory
+
+11. **React Security Scanner** (`dangerhtml.py`)
+   - Read access to target repository
+   - Git access (if scanning Git repositories)
+   - File system permissions for the target directory
+
+12. **Secret Detection Scanner** (`truff.py`)
+    - Read access to target repositories
+    - Git access for repository updates
+    - TruffleHog3 installation
+    - Write permissions for output directory
+
 Always apply the **principle of least privilege** when granting these permissions.
-
-## Best Practices
-
-1. **Regular Credential Rotation**: Rotate the access keys used by these scripts regularly.  
-2. **Audit & Logging**: Enable AWS CloudTrail (and optionally AWS Config) for complete visibility.  
-3. **Automated Schedules**: Use cron jobs, AWS Systems Manager Automation, or other schedulers to run these scripts periodically.  
-4. **Secure Storage**: Avoid committing sensitive configuration data/credentials to version control.  
-5. **Review Findings**: Promptly remediate high-risk or noncompliant findings from these reports.
 
 ## Error Handling
 
